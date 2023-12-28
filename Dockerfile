@@ -26,5 +26,5 @@ ENTRYPOINT [                                                \
    "-jar",                                                 \
    "-Djava.security.egd=file:/dev/./urandom",              \
    "-Dsun.net.inetaddr.ttl=0",                             \
-   "docker-0.0.1-SNAPSHOT.jar"
+   "docker-0.0.1-SNAPSHOT.jar"                             \
 ]
