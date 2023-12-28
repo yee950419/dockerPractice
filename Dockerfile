@@ -1,29 +1,30 @@
-# 베이스 이미지를 설정합니다. 여기서는 OpenJDK 8을 사용합니다.
-FROM openjdk:17-ea-3-jdk-slim
+FROM gradle:7.4-jdk17 as builder
+WORKDIR /build
 
-# Gradle 빌드를 위해 필요한 환경 변수를 설정합니다.
-ENV GRADLE_HOME /opt/gradle
-ENV GRADLE_VERSION 7.2
+# 그래들 파일이 변경되었을 때만 새롭게 의존패키지 다운로드 받게함.
+COPY build.gradle settings.gradle /build/
+RUN gradle build -x test --parallel --continue > /dev/null 2>&1 || true
 
-# Gradle 빌드 도구를 다운로드하고 설치합니다.
-RUN set -o errexit -o nounset \
-    && echo "Downloading Gradle" \
-    && wget --no-verbose --output-document=gradle.zip "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" \
-    && echo "Installing Gradle" \
-    && unzip gradle.zip \
-    && rm gradle.zip \
-    && mv "gradle-${GRADLE_VERSION}" "${GRADLE_HOME}/" \
-    && ln --symbolic "${GRADLE_HOME}/bin/gradle" /usr/bin/gradle \
-    && printf "Done installing Gradle\n"
+# 빌더 이미지에서 애플리케이션 빌드
+COPY . /build
+RUN gradle build -x test --parallel
 
-# 작업 디렉토리를 설정합니다.
+# APP
+FROM openjdk:17-ea-4-jdk-slim
 WORKDIR /app
 
-# 호스트 OS의 프로젝트 디렉토리를 Docker 컨테이너의 작업 디렉토리에 복사합니다.
-COPY . .
+# 빌더 이미지에서 jar 파일만 복사
+# COPY --from=builder /build/build/libs/*-SNAPSHOT.jar ./app.jar
+COPY --from=builder /build/build/libs/bbs-0.0.1-SNAPSHOT.jar .
 
-# Gradle 빌드를 수행합니다.
-RUN gradle build --no-daemon
+EXPOSE 8080
 
-# 빌드 결과물인 jar 파일을 실행합니다.
-ENTRYPOINT ["java","-jar","/app/build/libs/docker-0.0.1-SNAPSHOT.jar"]
+# root 대신 nobody 권한으로 실행
+USER nobody
+ENTRYPOINT [                                                \
+   "java",                                                 \
+   "-jar",                                                 \
+   "-Djava.security.egd=file:/dev/./urandom",              \
+   "-Dsun.net.inetaddr.ttl=0",                             \
+   "docker-0.0.1-SNAPSHOT.jar"
+]
